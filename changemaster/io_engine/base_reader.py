@@ -51,7 +51,10 @@ class BaseImageReader(abc.ABC):
             return True
         import importlib.util
 
-        return importlib.util.find_spec(cls.required_package) is not None
+        try:
+            return importlib.util.find_spec(cls.required_package) is not None
+        except (ImportError, ValueError):
+            return False
 
     @classmethod
     def can_read(cls, path: Path) -> bool:
@@ -69,7 +72,8 @@ class BaseImageReader(abc.ABC):
         """Release any underlying resources (idempotent)."""
 
     def __enter__(self) -> "BaseImageReader":
-        self.open()
+        if self._metadata is None:
+            self.open()
         return self
 
     def __exit__(self, *exc_info: object) -> None:
