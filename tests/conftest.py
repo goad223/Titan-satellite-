@@ -208,3 +208,71 @@ def landsat_tar(tmp_path: Path, landsat_scene: Path) -> Path:
         for item in sorted(landsat_scene.iterdir()):
             tar.add(item, arcname=item.name)
     return tar_path
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 (preprocessing) fixtures — all data generated programmatically.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def textured_pair() -> tuple[np.ndarray, np.ndarray]:
+    """Structured reference band and a (dx=5.3, dy=-3.7) shifted copy.
+
+    The scene mixes sinusoidal terrain, Gaussian blobs and fine texture so
+    feature detectors, phase correlation and ECC all behave as they do on
+    real imagery.
+    """
+    cv2 = pytest.importorskip("cv2")
+    rng = np.random.default_rng(0)
+    y, x = np.mgrid[0:300, 0:300].astype(np.float32)
+    scene = 50 * np.sin(x / 23) + 40 * np.cos(y / 17) + 30 * np.sin((x + y) / 31)
+    for _ in range(40):
+        cx, cy = rng.uniform(20, 280, size=2)
+        radius, amplitude = rng.uniform(5, 25), rng.uniform(30, 90)
+        scene += amplitude * np.exp(-(((x - cx) ** 2 + (y - cy) ** 2) / (2 * radius**2)))
+    scene += cv2.GaussianBlur(rng.random((300, 300)).astype(np.float32), (0, 0), 1.5) * 25
+    base = scene.astype(np.float32)
+    matrix = np.array([[1, 0, 5.3], [0, 1, -3.7]], dtype=np.float32)
+    moving = cv2.warpAffine(base, matrix, (300, 300))
+    return base, moving
+
+
+@pytest.fixture()
+def multiband_pair() -> tuple[np.ndarray, np.ndarray]:
+    """Co-registered 3-band pair with a linear radiometric distortion + change."""
+    rng = np.random.default_rng(1)
+    ref = rng.normal(100.0, 20.0, size=(3, 90, 100))
+    mov = ref * 1.3 + 15.0 + rng.normal(0.0, 2.0, size=(3, 90, 100))
+    mov[:, 20:40, 30:50] += 80.0  # a changed region
+    return ref, mov
+
+
+@pytest.fixture()
+def optical_pair_png(tmp_path: Path) -> tuple[Path, Path]:
+    """A reference/moving PNG pair with a known sub-pixel shift."""
+    cv2 = pytest.importorskip("cv2")
+    from PIL import Image
+
+    rng = np.random.default_rng(3)
+    base = cv2.GaussianBlur(rng.random((200, 200)).astype(np.float32), (0, 0), 2)
+    base = (base - base.min()) / (base.max() - base.min())
+    ref = np.stack([base * 200, base * 180, base * 220]).astype(np.uint8)
+    matrix = np.array([[1, 0, 4.0], [0, 1, -2.5]], dtype=np.float32)
+    mov = np.stack(
+        [cv2.warpAffine(b.astype(np.float32), matrix, (200, 200)) for b in ref]
+    ).astype(np.uint8)
+    ref_path = tmp_path / "ref.png"
+    mov_path = tmp_path / "mov.png"
+    Image.fromarray(np.transpose(ref, (1, 2, 0))).save(ref_path)
+    Image.fromarray(np.transpose(mov, (1, 2, 0))).save(mov_path)
+    return ref_path, mov_path
+
+
+@pytest.fixture()
+def speckled_image() -> np.ndarray:
+    """A gamma-distributed single-look speckle field over a two-level scene."""
+    rng = np.random.default_rng(7)
+    scene = np.full((64, 64), 0.1)
+    scene[:, 32:] = 0.5  # an edge between two homogeneous regions
+    return scene * rng.gamma(1.0, 1.0, size=(64, 64))

@@ -1,11 +1,11 @@
-# ChangeMaster Ultimate — Phase 1 (Foundation)
+# ChangeMaster Ultimate — Phases 1-2 (Foundation + Preprocessing)
 
 **English** | [العربية](#العربية)
 
 ChangeMaster Ultimate is a 100% offline Windows-first desktop application for
 detecting changes between satellite images. It adapts automatically to any
 hardware, from low-end laptops to GPU workstations. This repository contains
-**Phase 1 of 6**: the production-grade foundation.
+**Phases 1-2 of 6**: the production-grade foundation plus the full preprocessing stage.
 
 ## What's included in Phase 1
 
@@ -70,7 +70,15 @@ pytest          # enforces >= 80% coverage (currently ~91%)
 ## Roadmap
 
 * **Phase 1 — Foundation (this repo)**: hardware, config, logging, I/O engine, sensor profiles
-* Phase 2 — Preprocessing (`changemaster/preprocessing/`)
+* **Phase 2 — Preprocessing (this repo)** (`changemaster/preprocessing/`): quality gate,
+  co-registration (SIFT+ORB+AKAZE, FLANN+RANSAC, phase correlation + ECC,
+  Affine/Homography/TPS, coarse-to-fine pyramid, independent-checkpoint RMSE),
+  radiometric normalization (histogram matching, full IR-MAD, PIF), validity
+  masking (clouds via spectral+SCL/QA_PIXEL, sun-geometry shadows, NDSI snow,
+  NDWI/MNDWI water, nodata/saturation), SAR sigma0 calibration + speckle
+  filters (Refined Lee / Frost / Gamma-MAP), pair harmonization, and a
+  checkpointed `PreprocessingPipeline` with resume + JSON reports
+  (`scripts/titan_preprocess.py`)
 * Phases 3–4 — Change detection engines (`changemaster/engines/`)
 * Phase 5 — GUI (`changemaster/gui/`)
 * Phase 6 — Packaging and distribution
@@ -109,6 +117,9 @@ pip install numpy Pillow psutil
 
 # دعم الصيغ الاختياري
 pip install rasterio h5py netCDF4
+
+# المعالجة المسبقة (المرحلة الثانية)
+pip install opencv-python-headless scipy
 ```
 
 ## الاستخدام
@@ -116,6 +127,7 @@ pip install rasterio h5py netCDF4
 ```bash
 python scripts/titan_info.py                 # تقرير العتاد والصيغ
 python scripts/titan_inspect.py مسار/الصورة  # فحص صورة
+python scripts/titan_preprocess.py مرجع.tif ثانوية.tif --workdir خرج/  # المعالجة المسبقة
 ```
 
 ## الاختبارات
