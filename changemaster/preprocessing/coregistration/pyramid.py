@@ -166,8 +166,8 @@ def register_pyramid(
             if area.ecc_matrix is not None
             else np.array(
                 [
-                    [1.0, 0.0, -area.global_shift_xy[0]],
-                    [0.0, 1.0, -area.global_shift_xy[1]],
+                    [1.0, 0.0, area.global_shift_xy[0]],
+                    [0.0, 1.0, area.global_shift_xy[1]],
                 ]
             )
         )
@@ -194,10 +194,18 @@ def register_pyramid(
         warped = transform.warp_image(mov_work, ref.shape)
         try:
             area = grid_phase_correlation(ref, warped, hardware=hardware)
-            if area.ecc_matrix is not None:
+            residual = float(np.hypot(*area.global_shift_xy))
+            if area.ecc_matrix is not None and residual < 2.0:
                 refined = _compose_affine(area.ecc_matrix, transform.matrix)
-                transform = AffineTransform(matrix=refined)
-                refined_with_ecc = True
+                candidate = AffineTransform(matrix=refined)
+                # Accept the polish only when it does not degrade the
+                # feature-match agreement.
+                cand_rmse = float(np.sqrt(np.mean(
+                    candidate.residuals(matches.src_points, matches.dst_points) ** 2
+                )))
+                if cand_rmse <= fit_rmse * 1.5:
+                    transform = candidate
+                    refined_with_ecc = True
         except CoregistrationError:
             pass
     if fit_rmse > target_rmse_px:

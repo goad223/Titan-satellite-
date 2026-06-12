@@ -13,11 +13,7 @@ from typing import TYPE_CHECKING
 
 from changemaster.core.exceptions import CoregistrationError
 from changemaster.core.hardware import HardwareInfo
-from changemaster.preprocessing._common import (
-    adaptive_window_count,
-    normalize_to_uint8,
-    require_cv2,
-)
+from changemaster.preprocessing._common import adaptive_window_count, require_cv2
 
 if TYPE_CHECKING:
     import numpy as np
@@ -72,8 +68,8 @@ def phase_correlation_shift(
     cv2 = require_cv2()
     import numpy as np
 
-    ref = np.asarray(reference, dtype=np.float32)
-    mov = np.asarray(moving, dtype=np.float32)
+    ref = np.ascontiguousarray(reference, dtype=np.float32)
+    mov = np.ascontiguousarray(moving, dtype=np.float32)
     if ref.shape != mov.shape or ref.ndim != 2:
         raise CoregistrationError(
             f"Phase correlation needs same-shape 2-D windows; got {ref.shape} vs {mov.shape}.",
@@ -90,28 +86,57 @@ def ecc_refine(
     initial_matrix: "np.ndarray | None" = None,
     iterations: int = 200,
     eps: float = 1e-6,
+    min_correlation: float = 0.5,
+    max_update_px: float = 5.0,
 ) -> "np.ndarray | None":
     """Refine an affine warp with the ECC algorithm.
 
-    Returns the refined ``(2, 3)`` affine matrix mapping ``moving`` into the
-    reference frame, or ``None`` when ECC fails to converge.
+    Both ``initial_matrix`` and the returned matrix map *moving* pixels
+    into the *reference* frame (directly usable with ``cv2.warpAffine``).
+    Internally the matrix is inverted to OpenCV's ECC convention.
+
+    Returns ``None`` when ECC fails to converge, when the final correlation
+    falls below ``min_correlation``, or when the update moves more than
+    ``max_update_px`` away from the initial estimate (divergence guard).
     """
     cv2 = require_cv2()
     import numpy as np
 
-    ref8 = normalize_to_uint8(reference).astype(np.float32) / 255.0
-    mov8 = normalize_to_uint8(moving).astype(np.float32) / 255.0
-    warp = (
+    def _norm01(band: "np.ndarray") -> "np.ndarray":
+        data = np.asarray(band, dtype=np.float32)
+        finite = data[np.isfinite(data)]
+        if finite.size == 0:
+            return np.zeros(data.shape, dtype=np.float32)
+        lo, hi = float(finite.min()), float(finite.max())
+        if hi <= lo:
+            return np.zeros(data.shape, dtype=np.float32)
+        out = (data - lo) / (hi - lo)
+        out[~np.isfinite(data)] = 0.0
+        return out
+
+    ref8 = _norm01(reference)
+    mov8 = _norm01(moving)
+    forward = (
         np.asarray(initial_matrix, dtype=np.float32)
         if initial_matrix is not None
         else np.eye(2, 3, dtype=np.float32)
     )
+    # ECC expects the inverse convention: template (ref) -> input (moving).
+    warp = cv2.invertAffineTransform(forward)
+    initial = warp.copy()
     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, iterations, eps)
     try:
-        _, warp = cv2.findTransformECC(ref8, mov8, warp, cv2.MOTION_AFFINE, criteria)
+        cc, warp = cv2.findTransformECC(
+            ref8, mov8, warp, cv2.MOTION_AFFINE, criteria, None, 5
+        )
     except cv2.error:
         return None
-    return np.asarray(warp, dtype=np.float64)
+    if cc < min_correlation:
+        return None
+    delta = np.abs(np.asarray(warp, dtype=np.float64) - initial.astype(np.float64))
+    if delta[:, 2].max() > max_update_px or delta[:, :2].max() > 0.05:
+        return None  # diverged far from the initial estimate
+    return np.asarray(cv2.invertAffineTransform(warp), dtype=np.float64)
 
 
 def _window_grid(
@@ -171,7 +196,7 @@ def grid_phase_correlation(
         )
     h, w = ref.shape
     if window_size is None:
-        window_size = int(min(256, max(32, min(h, w) // 4)))
+        window_size = int(min(256, max(64, min(h, w) // 2)))
     window_size = min(window_size, h, w)
     n_windows = adaptive_window_count(hardware)
 
@@ -195,19 +220,15 @@ def grid_phase_correlation(
             suggestion_ar="تحقق من تداخل الصورتين وتباينهما، أو استخدم التسجيل القائم على الميزات.",
         )
 
-    weights = np.asarray([s.response for s in shifts], dtype=np.float64)
+    # Median over windows: robust against locally ambiguous correlations.
     dxs = np.asarray([s.shift_xy[0] for s in shifts], dtype=np.float64)
     dys = np.asarray([s.shift_xy[1] for s in shifts], dtype=np.float64)
-    weights_sum = float(weights.sum())
-    global_shift = (
-        float(np.dot(weights, dxs) / weights_sum),
-        float(np.dot(weights, dys) / weights_sum),
-    )
+    global_shift = (float(np.median(dxs)), float(np.median(dys)))
 
     ecc_matrix: "np.ndarray | None" = None
     if refine_with_ecc:
         initial = np.array(
-            [[1.0, 0.0, -global_shift[0]], [0.0, 1.0, -global_shift[1]]], dtype=np.float32
+            [[1.0, 0.0, global_shift[0]], [0.0, 1.0, global_shift[1]]], dtype=np.float32
         )
         ecc_matrix = ecc_refine(ref, mov, initial_matrix=initial)
 

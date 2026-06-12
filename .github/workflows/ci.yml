@@ -40,4 +40,6 @@ jobs:
       - name: Run tests (optional-format tests auto-skip)
         run: pytest --cov-fail-under=0
       - name: Smoke-test CLIs without heavy deps
-        run: python scripts/titan_info.py
+        run: |
+          python scripts/titan_info.py
+          python scripts/titan_preprocess.py --help
