@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "changemaster"
+version = "0.1.0"
+description = "ChangeMaster Ultimate — offline satellite image change detection (Phase 1 foundation)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=1.24",
+    "Pillow>=10.0",
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+geo = ["rasterio>=1.3"]
+hdf = ["h5py>=3.8"]
+netcdf = ["netCDF4>=1.6"]
+all = ["rasterio>=1.3", "h5py>=3.8", "netCDF4>=1.6"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1"]
+
+[tool.setuptools.packages.find]
+include = ["changemaster*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=changemaster --cov-report=term-missing --cov-fail-under=80"
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
