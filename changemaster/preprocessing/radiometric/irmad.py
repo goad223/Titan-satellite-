@@ -274,6 +274,11 @@ def compute_irmad(
             chi[sl] = block.reshape(vm.shape)
         weights_full = chi2.sf(chi, df=bands)
         weights_full[~valid_mask] = 0.0
+        # Degenerate guard: when the pair is almost perfectly correlated the
+        # chi-square explodes and all weights vanish; floor them so the
+        # accumulation stays well-defined (uniform in the limit).
+        if float(weights_full[valid_mask].sum()) < 1e-6:
+            weights_full[valid_mask] = 1.0
 
         if rho_prev is not None and float(np.max(np.abs(rho - rho_prev))) < tolerance:
             converged = True
@@ -294,6 +299,11 @@ def compute_irmad(
         x, y = _flatten_valid(ref[:, sl], mov[:, sl], vm)
         if x.shape[0]:
             stats.update(np.hstack([x, y]), weights_full[sl].ravel()[vm.ravel()])
+    if stats.weight_sum <= 0:
+        for sl, vm in _iter_chunks():
+            x, y = _flatten_valid(ref[:, sl], mov[:, sl], vm)
+            if x.shape[0]:
+                stats.update(np.hstack([x, y]))
     mu = stats.mean
     mad_variates = np.full((bands, height, width), np.nan)
     chi = np.zeros((height, width), dtype=np.float64)
