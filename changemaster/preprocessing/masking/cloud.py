@@ -160,10 +160,11 @@ def detect_clouds_spectral(
 
     if swir is not None:
         s = np.asarray(swir, dtype=np.float64) / reflectance_scale
-        green_proxy = stack[1] if len(stack) > 1 else b
-        denom = green_proxy + s
+        # Visible band for the NDSI test: red when available, else blue.
+        vis_band = stack[1] if len(stack) > 1 else b
+        denom = vis_band + s
         denom[denom == 0] = 1.0
-        ndsi = (green_proxy - s) / denom
+        ndsi = (vis_band - s) / denom
         mask &= ndsi < ndsi_cloud_max
 
     if cirrus is not None:

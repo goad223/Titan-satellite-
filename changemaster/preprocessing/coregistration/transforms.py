@@ -47,7 +47,7 @@ class GeometricTransform(abc.ABC):
 
 def _check_points(src: "np.ndarray", dst: "np.ndarray", minimum: int, model: str) -> None:
     """Validate matched point arrays for fitting."""
-    if src.shape != dst.shape or src.ndim != 2 or src.shape[1] != 2:
+    if src.ndim != 2 or src.shape != dst.shape or src.shape[1] != 2:
         raise CoregistrationError(
             f"Point arrays must both be (N, 2); got {src.shape} and {dst.shape}.",
             f"يجب أن تكون مصفوفتا النقاط بشكل (N, 2)؛ وجد {src.shape} و{dst.shape}.",

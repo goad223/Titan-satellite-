@@ -97,7 +97,9 @@ def refined_lee(
             f"يجب أن يكون عدد looks موجباً، وجد {looks}.",
         )
     pad = window_size // 2
-    filled = np.where(np.isfinite(arr), arr, np.nanmean(arr[np.isfinite(arr)]) if np.isfinite(arr).any() else 0.0)
+    finite = np.isfinite(arr)
+    fill_value = float(np.nanmean(arr[finite])) if finite.any() else 0.0
+    filled = np.where(finite, arr, fill_value)
     padded = np.pad(filled, pad, mode="reflect")
     windows = _sliding_windows(padded, window_size)  # (H, W, k, k)
     masks = _directional_masks(window_size)  # (8, k, k)
