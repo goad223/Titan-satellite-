@@ -105,6 +105,29 @@ class PreprocessingError(ChangeMasterError):
         super().__init__(message_en, message_ar)
 
 
+class EngineError(ChangeMasterError):
+    """Base class for Phase-3 change-detection engine errors.
+
+    Carries an optional actionable ``suggestion`` (bilingual) that tells the
+    user how to fix the problem.
+    """
+
+    def __init__(
+        self,
+        message_en: str,
+        message_ar: str | None = None,
+        suggestion_en: str | None = None,
+        suggestion_ar: str | None = None,
+    ) -> None:
+        self.suggestion_en: str | None = suggestion_en
+        self.suggestion_ar: str | None = suggestion_ar
+        if suggestion_en:
+            message_en = f"{message_en} Suggestion: {suggestion_en}"
+        if suggestion_ar and message_ar:
+            message_ar = f"{message_ar} الاقتراح: {suggestion_ar}"
+        super().__init__(message_en, message_ar)
+
+
 class QualityGateError(PreprocessingError):
     """Raised when an input image fails the preprocessing quality gate."""
 
