@@ -19,7 +19,14 @@ dependencies = [
 geo = ["rasterio>=1.3"]
 hdf = ["h5py>=3.8"]
 netcdf = ["netCDF4>=1.6"]
-all = ["rasterio>=1.3", "h5py>=3.8", "netCDF4>=1.6"]
+vision = ["opencv-python-headless>=4.8", "scipy>=1.10"]
+all = [
+    "rasterio>=1.3",
+    "h5py>=3.8",
+    "netCDF4>=1.6",
+    "opencv-python-headless>=4.8",
+    "scipy>=1.10",
+]
 dev = ["pytest>=7.4", "pytest-cov>=4.1"]
 
 [tool.setuptools.packages.find]

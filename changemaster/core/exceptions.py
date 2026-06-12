@@ -80,3 +80,50 @@ class MetadataError(ChangeMasterError):
 
 class SensorProfileError(ChangeMasterError):
     """Raised for unknown sensors or invalid sensor profile definitions."""
+
+
+class PreprocessingError(ChangeMasterError):
+    """Base class for all Phase-2 preprocessing errors.
+
+    Carries an optional actionable ``suggestion`` (bilingual) that tells the
+    user how to fix the problem.
+    """
+
+    def __init__(
+        self,
+        message_en: str,
+        message_ar: str | None = None,
+        suggestion_en: str | None = None,
+        suggestion_ar: str | None = None,
+    ) -> None:
+        self.suggestion_en: str | None = suggestion_en
+        self.suggestion_ar: str | None = suggestion_ar
+        if suggestion_en:
+            message_en = f"{message_en} Suggestion: {suggestion_en}"
+        if suggestion_ar and message_ar:
+            message_ar = f"{message_ar} الاقتراح: {suggestion_ar}"
+        super().__init__(message_en, message_ar)
+
+
+class QualityGateError(PreprocessingError):
+    """Raised when an input image fails the preprocessing quality gate."""
+
+
+class CoregistrationError(PreprocessingError):
+    """Raised when geometric co-registration fails irrecoverably."""
+
+
+class RadiometricError(PreprocessingError):
+    """Raised when radiometric normalization fails."""
+
+
+class MaskingError(PreprocessingError):
+    """Raised when validity-mask generation fails."""
+
+
+class SARCalibrationError(PreprocessingError):
+    """Raised when SAR radiometric calibration fails."""
+
+
+class PipelineError(PreprocessingError):
+    """Raised when the preprocessing pipeline cannot run or resume."""
